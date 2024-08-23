@@ -31,35 +31,11 @@ export default function Component() {
         initGlpk();
     }, []);
 
-    // // Function to normalize weights to ensure they sum to 1
-    // const normalizeWeights = (stocks: typeof initialStocks) => {
-    //     const totalWeight = stocks.reduce((sum, stock) => sum + stock.weight, 0)
-    //     return stocks.map(stock => ({ ...stock, weight: stock.weight / totalWeight }))
-    // }
-
-    // // Placeholder function for portfolio optimization
-    // const optimizePortfolio = () => {
-    //     // This is a simplified mock optimization. In a real scenario, you'd use a proper algorithm.
-    //     let newStocks = stocks.map(stock => {
-    //         // Adjust weight based on return and volatility (higher return and lower volatility preferred)
-    //         const adjustmentFactor = (stock.return / stock.volatility) * (optimizationStrength / 5)
-    //         return {
-    //             ...stock,
-    //             weight: Math.max(0, stock.weight * (1 + adjustmentFactor))
-    //         }
-    //     })
-
-    //     // Normalize weights to ensure they sum to 1
-    //     newStocks = normalizeWeights(newStocks)
-
-    //     setStocks(newStocks)
-    // }
-
-    // Calculate portfolio stats
-    const portfolioReturn = stocks.reduce((sum, stock) => sum + stock.return * stock.weight, 0)
-    const portfolioVolatility = Math.sqrt(
-        stocks.reduce((sum, stock) => sum + Math.pow(stock.volatility * stock.weight, 2), 0)
-    )
+    useEffect(() => {
+        if (glpk) {
+            optimizePortfolio();
+        }
+    }, [targetVolatility]);
 
     const optimizePortfolio = async () => {
 
@@ -113,17 +89,23 @@ export default function Component() {
             }))
         };
 
-        // Solve the LP problem
-        let result = await glpk!.solve(lp);
+        try {
+            // Solve the LP problem asynchronously
+            const result = await glpk!.solve(lp);
 
-        if (result.result.status === glpk!.GLP_OPT) {
-            console.log("Optimal solution found!");
-            stocks.forEach(stock => {
-                const weight = result.result.vars[`w_${stock.name}`];
-                console.log(`${stock.name}: ${weight}`);
-            });
-        } else {
-            console.log("No optimal solution found.");
+            if (result.result.status === glpk!.GLP_OPT) {
+                console.log("Optimal solution found!");
+                const updatedStocks = stocks.map(stock => {
+                    const weight = result.result.vars[`w_${stock.name}`];
+                    console.log(`${stock.name}: ${weight}`);
+                    return { ...stock, weight: weight ?? stock.weight };  // Update weight or keep original if undefined
+                });
+                setStocks(updatedStocks);
+            } else {
+                console.log("No optimal solution found.");
+            }
+        } catch (error) {
+            console.error("An error occurred during optimization:", error);
         }
 
     }
@@ -137,8 +119,9 @@ export default function Component() {
                 <label className="block text-sm font-medium text-gray-700">Risk Tolerance</label>
                 <Slider
                     value={[targetVolatility]}
-                    onValueChange={(value) => { setTargetVolatility(value[0]); optimizePortfolio(); }}
-                    max={1}
+                    onValueChange={(value) => { setTargetVolatility(value[0]); }}
+                    // max={1}
+                    max={0.28}
                     step={0.01}
                     className="w-64"
                 />
