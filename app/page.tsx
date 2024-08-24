@@ -9,10 +9,10 @@ import {GLPK, LP, Result } from 'glpk.js'
 
 // Mock data for stocks, now including return
 const initialStocks = [
-    { id: 1, name: 'AAPL', price: 150.25, volatility: 0.2, return: 0.12, weight: 0.25 },
-    { id: 2, name: 'GOOGL', price: 2750.80, volatility: 0.25, return: 0.15, weight: 0.25 },
-    { id: 3, name: 'MSFT', price: 305.50, volatility: 0.18, return: 0.10, weight: 0.25 },
-    { id: 4, name: 'AMZN', price: 3380.20, volatility: 0.28, return: 0.18, weight: 0.25 },
+    { id: 1, name: 'AAPL', price: 150.25, volatility: 0.2, return: 0.12, alphaWeight: 0.35,  weight: 0.25 },
+    { id: 2, name: 'GOOGL', price: 2750.80, volatility: 0.245, return: 0.15, alphaWeight: 0.25, weight: 0.25 },
+    { id: 3, name: 'MSFT', price: 305.50, volatility: 0.224, return: 0.10, alphaWeight: 0.20, weight: 0.25 },
+    { id: 4, name: 'AMZN', price: 3380.20, volatility: 0.265, return: 0.18, alphaWeight: 0.20, weight: 0.25 },
 ]
 
 export default function Component() {
@@ -37,77 +37,148 @@ export default function Component() {
         }
     }, [targetVolatility]);
 
+
+
+
     const optimizePortfolio = async () => {
-
-        // Extract data
-        const returns = stocks.map(stock => stock.return);
+        const alphaWeights = stocks.map(stock => stock.alphaWeight);
         const volatilities = stocks.map(stock => stock.volatility);
-
-        console.log('---------------------------');
-        console.log(targetVolatility);
-        console.log('---------------------------');
-
-        // Set a maximum acceptable volatility
-        // const maxVolatility = 0.25;
+        const scale = 100000; // Adjust this to match your regularization parameter
+        const maxVolatility = targetVolatility;
 
         // Define the LP problem
-        const lp: LP = {
-            name: "Portfolio Optimization",
+        const lp = {
+            name: 'Portfolio Optimization',
             objective: {
-                direction: glpk!.GLP_MAX,
-                name: "maximize_return",
-                vars: stocks.map((stock, i) => ({
-                    name: `w_${stock.name}`,
-                    coef: returns[i],
-                }))
+                direction: glpk!.GLP_MIN, // Minimize the objective
+                name: 'objective_function',
+                vars: [
+                    ...stocks.map((stock, i) => ({
+                        name: `w${i}`,
+                        coef: stock.volatility
+                    })),
+                    ...stocks.map((stock, i) => ({
+                        name: `dist_${i}`,
+                        coef: scale
+                    }))
+                ]
             },
             subjectTo: [
-                // Constraint: Total weight = 1
                 {
-                    name: "weight_sum",
-                    vars: stocks.map(stock => ({
-                        name: `w_${stock.name}`,
-                        coef: 1,
-                    })),
-                    bnds: { type: glpk!.GLP_FX, ub: 1, lb: 1 }
+                    name: 'sum_weights',
+                    vars: stocks.map((stock, i) => ({ name: `w${i}`, coef: 1 })),
+                    bnds: { type: glpk!.GLP_FX, lb: 1, ub: 1 }
                 },
-                // Constraint: Portfolio volatility <= maxVolatility
+                ...stocks.flatMap((stock, i) => [
+                    {
+                        name: `distance_constraint_${i}`,
+                        vars: [
+                            { name: `dist_${i}`, coef: 1 },
+                            { name: `w${i}`, coef: -1 }
+                        ],
+                        bnds: { type: glpk!.GLP_LO, lb: -alphaWeights[i], ub: Infinity }
+                    },
+                    // {
+                    //     name: `distance_constraint_${i}_neg`,
+                    //     vars: [
+                    //         { name: `dist_${i}`, coef: 1 },
+                    //         { name: `w${i}`, coef: 1 }
+                    //     ],
+                    //     bnds: { type: glpk!.GLP_LO, lb: alphaWeights[i], ub: Infinity }
+                    // }
+                ]),
                 {
-                    name: "max_volatility",
-                    vars: stocks.map((stock, i) => ({
-                        name: `w_${stock.name}`,
-                        coef: volatilities[i],
-                    })),
-                    bnds: { type: glpk!.GLP_UP, ub: targetVolatility, lb: 0 }
+                    name: 'volatility_constraint',
+                    vars: stocks.map((stock, i) => ({ name: `w${i}`, coef: stock.volatility })),
+                    bnds: { type: glpk!.GLP_UP, lb: 0, ub: maxVolatility }
                 }
             ],
-            bounds: stocks.map(stock => ({
-                name: `w_${stock.name}`,
-                type: glpk!.GLP_LO, // Lower bound
-                lb: 0,
-                ub: Infinity // No upper bound constraint for individual weights
-            }))
+            bounds: [
+                ...stocks.map((stock, i) => ({
+                    name: `w${i}`,
+                    type: glpk!.GLP_DB, // Double bounded (between lb and ub)
+                    lb: 0,
+                    ub: 1
+                })),
+                ...stocks.map((stock, i) => ({
+                    name: `dist_${i}`,
+                    type: glpk!.GLP_DB, // Free variable (can be negative)
+                    lb: 0, // Ensure non-negativity
+                    ub: Infinity
+                }))
+            ]
         };
 
+        console.log('LP Problem Setup:', JSON.stringify(lp, null, 2));
+
         try {
-            // Solve the LP problem asynchronously
             const result = await glpk!.solve(lp);
 
             if (result.result.status === glpk!.GLP_OPT) {
                 console.log("Optimal solution found!");
-                const updatedStocks = stocks.map(stock => {
-                    const weight = result.result.vars[`w_${stock.name}`];
-                    console.log(`${stock.name}: ${weight}`);
-                    return { ...stock, weight: weight ?? stock.weight };  // Update weight or keep original if undefined
+                const updatedStocks = stocks.map((stock, i) => {
+                    const weight = result.result.vars[`w${i}`];
+                    // Ensure weight is non-negative
+                    const adjustedWeight = Math.max(weight ?? 0, 0);
+                    console.log(`${stock.name}: ${adjustedWeight}`);
+                    return { ...stock, weight: adjustedWeight };
                 });
                 setStocks(updatedStocks);
             } else {
-                console.log("No optimal solution found.");
+                console.log("No optimal solution found. Status:", result.result.status);
+                console.log('Result:', result);
             }
         } catch (error) {
             console.error("An error occurred during optimization:", error);
         }
+    };
 
+
+
+
+    const calculatePortfolioVolatility = (weights: number[], covMatrix: number[][]): number => {
+        const portfolioVariance = calculatePortfolioVariance(weights, covMatrix);
+        return Math.sqrt(portfolioVariance); // Portfolio volatility
+    };
+
+    // Function to calculate portfolio variance
+    const calculatePortfolioVariance = (weights: number[], covMatrix: number[][]): number => {
+        let portfolioVariance = 0;
+
+        // Loop over each pair of assets
+        for (let i = 0; i < weights.length; i++) {
+            for (let j = 0; j < weights.length; j++) {
+                portfolioVariance += weights[i] * weights[j] * covMatrix[i][j];
+            }
+        }
+
+        return portfolioVariance; // Portfolio variance
+    };
+
+    const calculateCovarianceMatrix = (returns: number[][]): number[][] => {
+        const numStocks = returns.length;
+        const numPeriods = returns[0].length;
+        const covarianceMatrix = Array.from({ length: numStocks }, () => Array(numStocks).fill(0));
+
+        // Compute mean returns for each stock
+        const meanReturns = returns.map(stockReturns =>
+            stockReturns.reduce((acc, r) => acc + r, 0) / numPeriods
+        );
+
+        // Compute covariance for each pair of stocks
+        for (let i = 0; i < numStocks; i++) {
+            for (let j = 0; j < numStocks; j++) {
+                let cov = 0;
+
+                for (let k = 0; k < numPeriods; k++) {
+                    cov += (returns[i][k] - meanReturns[i]) * (returns[j][k] - meanReturns[j]);
+                }
+
+                covarianceMatrix[i][j] = cov / (numPeriods - 1); // Sample covariance
+            }
+        }
+
+        return covarianceMatrix;
     }
 
     return (
@@ -135,6 +206,7 @@ export default function Component() {
                         <TableHead>Price</TableHead>
                         <TableHead>Volatility</TableHead>
                         <TableHead>Return</TableHead>
+                        <TableHead>Optimal AT Weight</TableHead>
                         <TableHead>Weight</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -145,6 +217,7 @@ export default function Component() {
                             <TableCell>${stock.price.toFixed(2)}</TableCell>
                             <TableCell>{(stock.volatility * 100).toFixed(2)}%</TableCell>
                             <TableCell>{(stock.return * 100).toFixed(2)}%</TableCell>
+                            <TableCell>{(stock.alphaWeight * 100).toFixed(2)}%</TableCell>
                             <TableCell>{(stock.weight * 100).toFixed(2)}%</TableCell>
                         </TableRow>
                     ))}
