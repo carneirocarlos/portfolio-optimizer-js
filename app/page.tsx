@@ -58,7 +58,7 @@ export default function Component() {
     return (
         <div className="container mx-auto p-4">
             <h1 className="text-2xl font-bold mb-4">POC - Portfolio Optimizer</h1>
-            <p className="mb-4">Closely track Optimal AT Weights while constraining portfolio volatility.</p>
+            <p className="mb-4">Closely track Alpha Theory weights while constraining portfolio volatility.</p>
 
             <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700">Risk Tolerance</label>
