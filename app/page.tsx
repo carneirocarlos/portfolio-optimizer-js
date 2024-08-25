@@ -5,11 +5,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 
-import {GLPK, LP, Result } from 'glpk.js'
+import { GLPK, LP, Result } from 'glpk.js'
 
 // Mock data for stocks, now including return
 const initialStocks = [
-    { id: 1, name: 'AAPL', price: 150.25, volatility: 0.2, return: 0.12, alphaWeight: 0.35,  weight: 0.25 },
+    { id: 1, name: 'AAPL', price: 150.25, volatility: 0.2, return: 0.12, alphaWeight: 0.35, weight: 0.25 },
     { id: 2, name: 'GOOGL', price: 2750.80, volatility: 0.245, return: 0.15, alphaWeight: 0.25, weight: 0.25 },
     { id: 3, name: 'MSFT', price: 305.50, volatility: 0.224, return: 0.10, alphaWeight: 0.20, weight: 0.25 },
     { id: 4, name: 'AMZN', price: 3380.20, volatility: 0.265, return: 0.18, alphaWeight: 0.20, weight: 0.25 },
