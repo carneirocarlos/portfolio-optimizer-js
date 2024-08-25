@@ -57,7 +57,7 @@ export default function Component() {
 
     return (
         <div className="container mx-auto p-4">
-            <h1 className="text-2xl font-bold mb-4">POC - Portfolio Optimizer</h1>
+            <h1 className="text-2xl font-bold mb-4">JS Portfolio Optimizer</h1>
             <p className="mb-4">Closely track Alpha Theory weights while constraining portfolio volatility.</p>
 
             <div className="mb-4">
@@ -81,7 +81,7 @@ export default function Component() {
                         <TableHead>Volatility</TableHead>
                         {!isSmartphone && <TableHead>Return</TableHead>}
                         <TableHead>Alpha Theory Weight</TableHead>
-                        <TableHead>Weight</TableHead>
+                        <TableHead><b>Weight</b></TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -92,7 +92,7 @@ export default function Component() {
                             <TableCell>{(stock.volatility * 100).toFixed(2)}%</TableCell>
                             {!isSmartphone && <TableCell>{(stock.return * 100).toFixed(2)}%</TableCell>}
                             <TableCell>{(stock.alphaWeight * 100).toFixed(2)}%</TableCell>
-                            <TableCell>{(stock.weight * 100).toFixed(2)}%</TableCell>
+                            <TableCell><b>{(stock.weight * 100).toFixed(2)}%</b></TableCell>
                         </TableRow>
                     ))}
                 </TableBody>
